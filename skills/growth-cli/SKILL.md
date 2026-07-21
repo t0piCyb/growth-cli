@@ -111,8 +111,9 @@ CI, where there is a single organization.
 | `growth-cli contacts identify --email <e> [--tags] [--remove-tags] [--field k=v]` | **Upsert with ADDITIVE tags + MERGED fields** |
 | `growth-cli contacts create --email <e> [--first-name] [--last-name] [--tags]` | Upsert that REPLACES tags and fields |
 | `growth-cli contacts update <email> [...]` | Patch a contact |
+| `growth-cli contacts sync --email <e> --event-key <k> --event-type <t> --event-source <s>` | Merge + record a deduplicated lifecycle event |
 | `growth-cli contacts unsubscribe <email>` | Unsubscribe |
-| `growth-cli contacts delete <email>` | Delete |
+| `growth-cli contacts delete <email>` | Alias for unsubscribe — there is no hard delete |
 | `growth-cli tags list` | Tags with contact counts |
 | `growth-cli tags add <email> --tags a,b` | Add tags |
 | `growth-cli tags remove <email> --tags a,b` | Remove tags |
@@ -197,6 +198,15 @@ growth-cli workflows publish <id> --json
 position, so the response reports `activeEnrollments` when any are affected.
 Use `publish` / `pause` (a PATCH of `status` only) when you do not want to
 touch steps.
+
+### transactional (alias `tx`)
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli transactional list` | Templates available in the organization |
+| `growth-cli transactional send <slug> --email <e> [--var k=v] [--tags a,b]` | Send one transactional email |
+
+`--var` fills the template's `@{variable}` placeholders. `--tags` are merged onto the contact, never replaced.
 
 ### affiliate
 

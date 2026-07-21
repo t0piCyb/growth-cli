@@ -26,6 +26,11 @@ type ActionOpts = {
   limit?: string;
   cursor?: string;
   removeTags?: string;
+  eventKey?: string;
+  eventType?: string;
+  eventSource?: string;
+  consent?: string;
+  consentSource?: string;
 };
 
 const splitList = (value: string | undefined) =>
@@ -148,6 +153,83 @@ contactsResource
       }
       output(contactFromResponse(data), { format: opts.format });
       // Silent caps would read as "everything was written".
+      if (data.skippedTags?.length) {
+        console.warn(
+          `warning: tag limit reached, not added: ${data.skippedTags.join(", ")}`,
+        );
+      }
+      if (data.skippedCustomFields?.length) {
+        console.warn(
+          `warning: custom field limit reached, not written: ${data.skippedCustomFields.join(", ")}`,
+        );
+      }
+    } catch (err) {
+      handleError(err, opts.json);
+    }
+  });
+
+contactsResource
+  .command("sync")
+  .description("Record a lifecycle event (deduplicated) and merge the profile")
+  .requiredOption("--email <email>", "Subscriber email")
+  .requiredOption(
+    "--event-key <key>",
+    "Idempotency key: replaying the same key is a no-op",
+  )
+  .requiredOption(
+    "--event-type <type>",
+    "thematic_signup|freebie_requested|purchase_paid|purchase_refunded|user_associated",
+  )
+  .requiredOption("--event-source <source>", "Where the event came from")
+  .option("--consent <mode>", "granted|not_provided", "not_provided")
+  .option("--consent-source <source>", "Required when --consent granted")
+  .option("--first-name <name>", "First name")
+  .option("--last-name <name>", "Last name")
+  .option("--tags <tags>", "Comma-separated tags to ADD")
+  .option("--remove-tags <tags>", "Comma-separated tags to remove")
+  .option("--field <key=value>", "Comma-separated custom fields to merge")
+  .option("--json", "Output as JSON")
+  .addHelpText(
+    "after",
+    "\nSame merge semantics as `identify`, plus a recorded, deduplicated\nlifecycle event and consent tracking. Use `identify` when you do not\nneed the event trail.\n\nExample:\n  growth-cli contacts sync --email a@b.c --event-key order_123 \\\n    --event-type purchase_paid --event-source stripe --tags customer",
+  )
+  .action(async (opts: ActionOpts) => {
+    try {
+      const data = (await client.post("/email/contacts/sync", {
+        email: opts.email,
+        eventKey: opts.eventKey,
+        eventType: opts.eventType,
+        eventSource: opts.eventSource,
+        consentMode: opts.consent ?? "not_provided",
+        ...(opts.consentSource && { consentSource: opts.consentSource }),
+        ...(opts.firstName && { firstName: opts.firstName }),
+        ...(opts.lastName && { lastName: opts.lastName }),
+        ...(opts.tags && { tags: splitList(opts.tags) }),
+        ...(opts.removeTags && { removeTags: splitList(opts.removeTags) }),
+        ...(opts.field && { customFields: parseCustomFields(opts.field) }),
+      })) as {
+        contact?: unknown;
+        deduplicated?: boolean;
+        consentBlocked?: boolean;
+        skippedTags?: string[];
+        skippedCustomFields?: string[];
+      };
+
+      if (wantsJson(opts)) {
+        output(data, { json: true });
+        return;
+      }
+      output(contactFromResponse(data), { format: opts.format });
+      if (data.deduplicated) {
+        console.warn(
+          "note: this event key was already recorded; nothing was changed.",
+        );
+      }
+      if (data.consentBlocked) {
+        console.warn(
+          "warning: the contact is suppressed, so marketing consent was not granted.",
+        );
+      }
       if (data.skippedTags?.length) {
         console.warn(
           `warning: tag limit reached, not added: ${data.skippedTags.join(", ")}`,

@@ -8,6 +8,7 @@ import { contactsResource } from "./resources/contacts.js";
 import { membersResource } from "./resources/members.js";
 import { orgResource } from "./resources/org.js";
 import { tagsResource } from "./resources/tags.js";
+import { transactionalResource } from "./resources/transactional.js";
 import { workflowsResource } from "./resources/workflows.js";
 
 const program = new Command();
@@ -15,7 +16,7 @@ const program = new Command();
 program
   .name("growth-cli")
   .description("CLI for the growth API")
-  .version("0.1.0")
+  .version("0.2.0")
   .option("--json", "Output as JSON", false)
   .option("--format <fmt>", "Output format: text, json, csv, yaml", "text")
   .option("--verbose", "Enable debug logging", false)
@@ -42,6 +43,7 @@ program.addCommand(membersResource);
 program.addCommand(contactsResource);
 program.addCommand(tagsResource);
 program.addCommand(workflowsResource);
+program.addCommand(transactionalResource);
 program.addCommand(affiliateResource);
 
 program.parse();

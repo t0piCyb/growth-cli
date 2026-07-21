@@ -23,7 +23,7 @@ growth-cli auth set nsk_xxx --profile my-org
 growth-cli auth test
 growth-cli org show
 growth-cli contacts list
-growth-cli contacts create --email user@example.com --first-name Jane --tags newsletter,vip
+growth-cli contacts identify --email user@example.com --first-name Jane --tags newsletter
 growth-cli tags add user@example.com vip
 growth-cli workflows list
 growth-cli workflows trigger <workflow-id> --email user@example.com
@@ -38,8 +38,10 @@ growth-cli members get <member-id>
 
 growth-cli contacts list [--status subscribed] [--tag newsletter] [--limit 50] [--cursor <cursor>]
 growth-cli contacts get <email>
+growth-cli contacts identify --email <email> [--tags a,b] [--remove-tags c] [--field plan=pro]
 growth-cli contacts create --email <email> [--first-name <name>] [--last-name <name>] [--tags a,b] [--field plan=pro]
 growth-cli contacts update <email> [--email <new-email>] [--first-name <name>] [--last-name <name>] [--field plan=pro]
+growth-cli contacts sync --email <email> --event-key <key> --event-type purchase_paid --event-source stripe
 growth-cli contacts unsubscribe <email>
 growth-cli contacts delete <email>
 
@@ -55,10 +57,31 @@ growth-cli workflows publish|pause|unpublish <workflow-id>
 growth-cli workflows delete <workflow-id> [--force]
 growth-cli workflows trigger <workflow-id> --email <email> [--tags a,b]
 
+growth-cli transactional list
+growth-cli transactional send <slug> --email <email> [--var firstName=Jane] [--tags a,b]
+
 growth-cli affiliate click --ref <ref>
 growth-cli affiliate signup --customer-key <key> [--ref <ref>]
 growth-cli affiliate payment --customer-key <key> [--amount 4900 --currency usd --source-id invoice_123]
 ```
+
+## Writing contacts: identify vs create
+
+`identify` creates the contact when missing, **adds** tags without dropping the
+ones another integration wrote, and **merges** custom fields. `create` replaces
+the whole tag set and the whole custom-field record — calling it on signup
+silently wipes tags written by an earlier freebie or purchase flow.
+
+Use `identify` for app-side events. Use `create` only when the payload is the
+complete truth about that contact. `tags add` is additive too, but returns 404
+when the contact does not exist yet.
+
+`contacts sync` applies the same merge as `identify` and additionally records a
+deduplicated lifecycle event (`--event-key` makes a replay a no-op) with
+consent tracking.
+
+`contacts delete` is an alias for unsubscribe: Growth has no hard delete, so
+send and event history is preserved.
 
 ## Profiles
 
