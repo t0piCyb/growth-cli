@@ -3,6 +3,14 @@ import { Command } from "commander";
 import { client } from "../lib/client.js";
 import { CliError, handleError } from "../lib/errors.js";
 import { output } from "../lib/output.js";
+import { globalFlags } from "../lib/config.js";
+
+/**
+ * `--json` may arrive on the subcommand OR be inherited from the root command,
+ * where the preAction hook parks it in globalFlags. Branching on `opts.json`
+ * alone silently takes the text path for `growth-cli --json <cmd>`.
+ */
+const wantsJson = (opts: { json?: boolean }) => opts.json ?? globalFlags.json;
 
 type ActionOpts = {
   json?: boolean;
@@ -133,7 +141,7 @@ const toAuthoringDoc = (workflow: any) => {
 
 /** Prints the save response, warning when live enrollments were affected. */
 const reportSave = (data: any, opts: ActionOpts) => {
-  if (opts.json) {
+  if (wantsJson(opts)) {
     output(data, { json: true });
     return;
   }
@@ -166,7 +174,7 @@ workflowsResource
         ...(opts.status && { status: opts.status }),
         ...(opts.trigger && { trigger: opts.trigger }),
       })) as { workflows?: any[] };
-      output(opts.json ? data : (data.workflows ?? []).map(workflowRow), {
+      output(wantsJson(opts) ? data : (data.workflows ?? []).map(workflowRow), {
         json: opts.json,
         format: opts.format,
         fields: opts.fields?.split(","),
@@ -205,7 +213,7 @@ workflowsResource
         }
         return;
       }
-      output(opts.json ? data : (data.workflow ?? data), {
+      output(wantsJson(opts) ? data : (data.workflow ?? data), {
         json: opts.json,
         format: opts.format,
       });

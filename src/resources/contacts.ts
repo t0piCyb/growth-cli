@@ -2,6 +2,14 @@ import { Command } from "commander";
 import { client } from "../lib/client.js";
 import { handleError } from "../lib/errors.js";
 import { output } from "../lib/output.js";
+import { globalFlags } from "../lib/config.js";
+
+/**
+ * `--json` may arrive on the subcommand OR be inherited from the root command,
+ * where the preAction hook parks it in globalFlags. Branching on `opts.json`
+ * alone silently takes the text path for `growth-cli --json <cmd>`.
+ */
+const wantsJson = (opts: { json?: boolean }) => opts.json ?? globalFlags.json;
 
 type ActionOpts = {
   json?: boolean;
@@ -134,7 +142,7 @@ contactsResource
         skippedCustomFields?: string[];
       };
 
-      if (opts.json) {
+      if (wantsJson(opts)) {
         output(data, { json: true });
         return;
       }
