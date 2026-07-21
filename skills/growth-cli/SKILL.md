@@ -108,13 +108,22 @@ CI, where there is a single organization.
 | --- | --- |
 | `growth-cli contacts list [--status <s>] [--tag <t>] [--limit <n>]` | List contacts |
 | `growth-cli contacts get <email>` | One contact |
-| `growth-cli contacts create --email <e> [--first-name] [--last-name] [--tags]` | Create/upsert |
+| `growth-cli contacts identify --email <e> [--tags] [--remove-tags] [--field k=v]` | **Upsert with ADDITIVE tags + MERGED fields** |
+| `growth-cli contacts create --email <e> [--first-name] [--last-name] [--tags]` | Upsert that REPLACES tags and fields |
 | `growth-cli contacts update <email> [...]` | Patch a contact |
 | `growth-cli contacts unsubscribe <email>` | Unsubscribe |
 | `growth-cli contacts delete <email>` | Delete |
 | `growth-cli tags list` | Tags with contact counts |
 | `growth-cli tags add <email> --tags a,b` | Add tags |
 | `growth-cli tags remove <email> --tags a,b` | Remove tags |
+
+**Choosing a write command.** `identify` is the default for app-side events
+(signup, purchase, attribution): it creates the contact when missing, adds tags
+without dropping the ones another integration wrote, and merges custom fields.
+`create` and `tags add` have sharp edges — `create` replaces the whole tag set
+AND the whole custom-field record, `tags add` returns 404 when the contact does
+not exist yet. Adding a tag through `identify` still fires `tag_added`
+workflows, so no placeholder workflow is needed to carry a payload.
 
 ### workflows
 

@@ -17,6 +17,7 @@ type ActionOpts = {
   tag?: string;
   limit?: string;
   cursor?: string;
+  removeTags?: string;
 };
 
 const splitList = (value: string | undefined) =>
@@ -103,8 +104,60 @@ contactsResource
   });
 
 contactsResource
+  .command("identify")
+  .description("Create or update a subscriber, adding tags and merging fields")
+  .requiredOption("--email <email>", "Subscriber email")
+  .option("--first-name <name>", "First name")
+  .option("--last-name <name>", "Last name")
+  .option("--tags <tags>", "Comma-separated tags to ADD (never removes)")
+  .option("--remove-tags <tags>", "Comma-separated tags to remove")
+  .option("--field <key=value>", "Comma-separated custom fields to merge")
+  .option("--json", "Output as JSON")
+  .addHelpText(
+    "after",
+    "\nUnlike `create`, this never drops tags or custom fields written by\nanother integration. Prefer it for app-side events (signup, purchase).\n\nExample:\n  growth-cli contacts identify --email a@b.c --tags signup --field utm_source=google",
+  )
+  .action(async (opts: ActionOpts) => {
+    try {
+      const data = (await client.post("/email/contacts/identify", {
+        email: opts.email,
+        ...(opts.firstName && { firstName: opts.firstName }),
+        ...(opts.lastName && { lastName: opts.lastName }),
+        ...(opts.tags && { tags: splitList(opts.tags) }),
+        ...(opts.removeTags && { removeTags: splitList(opts.removeTags) }),
+        ...(opts.field && { customFields: parseCustomFields(opts.field) }),
+      })) as {
+        contact?: unknown;
+        created?: boolean;
+        addedTags?: string[];
+        skippedTags?: string[];
+        skippedCustomFields?: string[];
+      };
+
+      if (opts.json) {
+        output(data, { json: true });
+        return;
+      }
+      output(contactFromResponse(data), { format: opts.format });
+      // Silent caps would read as "everything was written".
+      if (data.skippedTags?.length) {
+        console.warn(
+          `warning: tag limit reached, not added: ${data.skippedTags.join(", ")}`,
+        );
+      }
+      if (data.skippedCustomFields?.length) {
+        console.warn(
+          `warning: custom field limit reached, not written: ${data.skippedCustomFields.join(", ")}`,
+        );
+      }
+    } catch (err) {
+      handleError(err, opts.json);
+    }
+  });
+
+contactsResource
   .command("create")
-  .description("Create or update a subscriber")
+  .description("Create or update a subscriber (REPLACES tags and fields)")
   .requiredOption("--email <email>", "Subscriber email")
   .option("--first-name <name>", "First name")
   .option("--last-name <name>", "Last name")
