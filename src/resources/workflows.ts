@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { Command } from "commander";
 import { client } from "../lib/client.js";
 import { CliError, handleError } from "../lib/errors.js";
+import { readJsonDocument } from "../lib/jsonFile.js";
 import { output } from "../lib/output.js";
 import { globalFlags } from "../lib/config.js";
 
@@ -21,6 +21,7 @@ type ActionOpts = {
   file?: string;
   export?: boolean;
   force?: boolean;
+  clear?: boolean;
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -54,28 +55,6 @@ const workflowRow = (workflow: any) => ({
   steps: workflow.steps?.length ?? 0,
   updatedAt: workflow.updatedAt,
 });
-
-/** Reads a workflow document from a JSON file, or from stdin when path is "-". */
-const readWorkflowFile = (path: string): Record<string, unknown> => {
-  let raw: string;
-  try {
-    raw = readFileSync(path === "-" ? 0 : path, "utf8");
-  } catch (err) {
-    throw new CliError(400, `Cannot read ${path}: ${(err as Error).message}`);
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err) {
-    throw new CliError(400, `${path} is not valid JSON: ${(err as Error).message}`);
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new CliError(400, `${path} must contain a JSON object`);
-  }
-  return parsed as Record<string, unknown>;
-};
 
 const dropEmpty = (step: Record<string, unknown>) =>
   Object.fromEntries(
@@ -230,7 +209,7 @@ workflowsResource
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .action(async (opts: ActionOpts) => {
     try {
-      const body = readWorkflowFile(opts.file!);
+      const body = readJsonDocument(opts.file!);
       const data = await client.post("/email/workflows", body);
       reportSave(data, opts);
     } catch (err) {
@@ -247,7 +226,7 @@ workflowsResource
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .action(async (workflowId: string, opts: ActionOpts) => {
     try {
-      const body = readWorkflowFile(opts.file!);
+      const body = readJsonDocument(opts.file!);
       const data = await client.put(
         `/email/workflows/${encodeURIComponent(workflowId)}`,
         body,
@@ -300,6 +279,43 @@ workflowsResource
   .action((workflowId: string, opts: ActionOpts) =>
     setStatus(workflowId, "draft", opts),
   );
+
+workflowsResource
+  .command("exclude-tags")
+  .description("Set the tags that keep a contact out of a workflow")
+  .argument("<workflow-id>", "Workflow ID")
+  .option("--tags <tags>", "Comma-separated tags (replaces the current list)")
+  .option("--clear", "Remove every exclude tag")
+  .option("--json", "Output as JSON")
+  .option("--format <fmt>", "Output format: text, json, csv, yaml")
+  .addHelpText(
+    "after",
+    "\nExclude tags are checked on entry AND before every step, so a contact\nthat gains one mid-flow leaves the workflow. Unlike `update`, this only\npatches the trigger rules and never touches the step tree.\n\nExample:\n  growth-cli workflows exclude-tags n97… --tags customer",
+  )
+  .action(async (workflowId: string, opts: ActionOpts) => {
+    try {
+      if (!opts.clear && !opts.tags) {
+        throw new CliError(400, "Pass --tags <list> or --clear");
+      }
+      const data = (await client.patch(
+        `/email/workflows/${encodeURIComponent(workflowId)}`,
+        { triggerExcludeTags: opts.clear ? [] : splitList(opts.tags) },
+      )) as { workflow?: any };
+      // No steps were sent, so the mid-flow warning in reportSave would lie.
+      output(
+        wantsJson(opts)
+          ? data
+          : {
+              ...workflowRow(data.workflow),
+              excludeTags:
+                (data.workflow?.triggerExcludeTags ?? []).join(",") || "-",
+            },
+        { json: opts.json, format: opts.format },
+      );
+    } catch (err) {
+      handleError(err, opts.json);
+    }
+  });
 
 workflowsResource
   .command("delete")

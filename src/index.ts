@@ -16,7 +16,7 @@ const program = new Command();
 program
   .name("growth-cli")
   .description("CLI for the growth API")
-  .version("0.2.0")
+  .version("0.3.0")
   .option("--json", "Output as JSON", false)
   .option("--format <fmt>", "Output format: text, json, csv, yaml", "text")
   .option("--verbose", "Enable debug logging", false)

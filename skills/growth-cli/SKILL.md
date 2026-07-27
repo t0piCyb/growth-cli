@@ -199,14 +199,49 @@ position, so the response reports `activeEnrollments` when any are affected.
 Use `publish` / `pause` (a PATCH of `status` only) when you do not want to
 touch steps.
 
+`growth-cli workflows exclude-tags <id> --tags customer` patches only the
+trigger rules. Exclude tags are checked on entry **and before every step**, so
+a contact that gains one mid-flow leaves the workflow — that is how you stop
+one sequence from selling to someone another sequence already converted. Use
+this instead of wrapping every email in a `has_tag` condition.
+
 ### transactional (alias `tx`)
 
 | Command | Effect |
 | --- | --- |
-| `growth-cli transactional list` | Templates available in the organization |
+| `growth-cli transactional list` | Active definitions in the organization |
+| `growth-cli transactional get <slug> [--export]` | One definition, content included |
+| `growth-cli transactional create --file <path>` | Create from a JSON document |
+| `growth-cli transactional update <slug> --file <path>` | Patch the keys present in the file |
+| `growth-cli transactional archive\|restore <slug>` | Flip the status |
 | `growth-cli transactional send <slug> --email <e> [--var k=v] [--tags a,b]` | Send one transactional email |
 
 `--var` fills the template's `@{variable}` placeholders. `--tags` are merged onto the contact, never replaced.
+
+One JSON document carries the definition **and** its email content — the
+two-row storage (definition + bound template) is invisible from the API:
+
+```json
+{
+  "slug": "freebie-kit",
+  "name": "Freebie kit delivery",
+  "subject": "Your kit has arrived",
+  "previewText": "Print it before Sunday",
+  "status": "active",
+  "contentBlocks": [
+    { "type": "snippet", "props": { "snippetId": "nh79..." } },
+    { "type": "text", "props": { "markdown": "Hi @{firstName|there}," } },
+    { "type": "button", "props": { "label": "Download", "url": "@{kitLink|https://example.com/}", "align": "center", "backgroundColor": "#2563eb" } }
+  ]
+}
+```
+
+`get --export` prints exactly that shape, so a transactional round-trips:
+export, edit, `update`. `update` writes only the keys present in the file.
+Placeholders resolve inside a button's `url` too, so a per-recipient link can
+be passed at send time through `--var`.
+
+`list` returns only `active` definitions; read an archived one with `get`.
 
 ### affiliate
 

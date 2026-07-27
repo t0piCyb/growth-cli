@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { client } from "../lib/client.js";
 import { handleError } from "../lib/errors.js";
+import { readJsonDocument } from "../lib/jsonFile.js";
 import { output } from "../lib/output.js";
 import { globalFlags } from "../lib/config.js";
 
@@ -14,12 +15,40 @@ type ActionOpts = {
   json?: boolean;
   format?: string;
   fields?: string;
+  file?: string;
+  export?: boolean;
   email?: string;
   firstName?: string;
   lastName?: string;
   tags?: string;
   var?: string;
 };
+
+/**
+ * Keys the API accepts on create/update. A `get --export` response carries
+ * read-only extras (id, stats, timestamps); dropping them here is what makes
+ * export → edit → update a clean round-trip.
+ */
+const AUTHORING_KEYS = [
+  "slug",
+  "name",
+  "description",
+  "templateName",
+  "subject",
+  "previewText",
+  "contentBlocks",
+  "subjectOverride",
+  "status",
+] as const;
+
+const toAuthoringDoc = (transactional: any) =>
+  Object.fromEntries(
+    AUTHORING_KEYS.flatMap((key) =>
+      transactional?.[key] === null || transactional?.[key] === undefined
+        ? []
+        : [[key, transactional[key]]],
+    ),
+  );
 
 const splitList = (value: string | undefined) =>
   (value ?? "")
@@ -40,17 +69,19 @@ const parsePairs = (value: string | undefined) => {
   return Object.keys(pairs).length > 0 ? pairs : undefined;
 };
 
+/** `list` has no subject (the content lives on the bound template); `get`,
+ * `create` and `update` do. Columns absent from the payload print as "-". */
 const transactionalRow = (transactional: any) => ({
-  slug: transactional.slug ?? transactional.id,
-  name: transactional.name,
-  subject: transactional.subject,
-  status: transactional.status ?? "-",
-  updatedAt: transactional.updatedAt,
+  slug: transactional?.slug ?? transactional?.id,
+  name: transactional?.name,
+  subject: transactional?.subject ?? transactional?.subjectOverride,
+  status: transactional?.status,
+  updatedAt: transactional?.updatedAt,
 });
 
 export const transactionalResource = new Command("transactional")
   .alias("tx")
-  .description("List and send transactional emails");
+  .description("Create, edit and send transactional emails");
 
 transactionalResource
   .command("list")
@@ -77,6 +108,120 @@ transactionalResource
       handleError(err, opts.json);
     }
   });
+
+transactionalResource
+  .command("get")
+  .description("Show one transactional email with its content")
+  .argument("<transactional>", "Transactional slug or id")
+  .option("--export", "Print the authoring JSON (feeds --file)")
+  .option("--json", "Output as JSON")
+  .option("--format <fmt>", "Output format: text, json, csv, yaml")
+  .action(async (transactional: string, opts: ActionOpts) => {
+    try {
+      const data = (await client.get(
+        `/email/transactional/${encodeURIComponent(transactional)}`,
+      )) as { transactional?: any };
+
+      if (opts.export) {
+        console.log(JSON.stringify(toAuthoringDoc(data.transactional), null, 2));
+        return;
+      }
+      output(wantsJson(opts) ? data : (data.transactional ?? data), {
+        json: opts.json,
+        format: opts.format,
+      });
+    } catch (err) {
+      handleError(err, opts.json);
+    }
+  });
+
+transactionalResource
+  .command("create")
+  .description("Create a transactional email from a JSON document")
+  .requiredOption("--file <path>", 'Transactional JSON file ("-" reads stdin)')
+  .option("--json", "Output as JSON")
+  .option("--format <fmt>", "Output format: text, json, csv, yaml")
+  .addHelpText(
+    "after",
+    '\nThe document holds both the definition and its content:\n  { "slug": "freebie-kit", "name": "Kit delivery", "subject": "Your kit",\n    "contentBlocks": [ { "type": "text", "props": { "markdown": "Hi" } } ] }',
+  )
+  .action(async (opts: ActionOpts) => {
+    try {
+      const data = (await client.post(
+        "/email/transactional",
+        readJsonDocument(opts.file!),
+      )) as { transactional?: any };
+      output(wantsJson(opts) ? data : transactionalRow(data.transactional), {
+        json: opts.json,
+        format: opts.format,
+      });
+    } catch (err) {
+      handleError(err, opts.json);
+    }
+  });
+
+transactionalResource
+  .command("update")
+  .description("Update a transactional email from a JSON document")
+  .argument("<transactional>", "Transactional slug or id")
+  .requiredOption("--file <path>", 'Transactional JSON file ("-" reads stdin)')
+  .option("--json", "Output as JSON")
+  .option("--format <fmt>", "Output format: text, json, csv, yaml")
+  .addHelpText(
+    "after",
+    "\nOnly the keys present in the file are written; everything else is left\nalone. Sending subject/previewText/contentBlocks rewrites the bound\ntemplate in place — already-sent emails keep their rendered copy.",
+  )
+  .action(async (transactional: string, opts: ActionOpts) => {
+    try {
+      const data = (await client.patch(
+        `/email/transactional/${encodeURIComponent(transactional)}`,
+        readJsonDocument(opts.file!),
+      )) as { transactional?: any };
+      output(wantsJson(opts) ? data : transactionalRow(data.transactional), {
+        json: opts.json,
+        format: opts.format,
+      });
+    } catch (err) {
+      handleError(err, opts.json);
+    }
+  });
+
+const setStatus = async (
+  transactional: string,
+  status: "active" | "archived",
+  opts: ActionOpts,
+) => {
+  try {
+    const data = (await client.patch(
+      `/email/transactional/${encodeURIComponent(transactional)}`,
+      { status },
+    )) as { transactional?: any };
+    output(wantsJson(opts) ? data : transactionalRow(data.transactional), {
+      json: opts.json,
+      format: opts.format,
+    });
+  } catch (err) {
+    handleError(err, opts.json);
+  }
+};
+
+transactionalResource
+  .command("archive")
+  .description("Archive a transactional email (sends start failing with 409)")
+  .argument("<transactional>", "Transactional slug or id")
+  .option("--json", "Output as JSON")
+  .action((transactional: string, opts: ActionOpts) =>
+    setStatus(transactional, "archived", opts),
+  );
+
+transactionalResource
+  .command("restore")
+  .description("Set an archived transactional email back to active")
+  .argument("<transactional>", "Transactional slug or id")
+  .option("--json", "Output as JSON")
+  .action((transactional: string, opts: ActionOpts) =>
+    setStatus(transactional, "active", opts),
+  );
 
 transactionalResource
   .command("send")

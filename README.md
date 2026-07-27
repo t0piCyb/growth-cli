@@ -54,10 +54,15 @@ growth-cli workflows get <workflow-id> [--export]
 growth-cli workflows create --file <path>
 growth-cli workflows update <workflow-id> --file <path>
 growth-cli workflows publish|pause|unpublish <workflow-id>
+growth-cli workflows exclude-tags <workflow-id> --tags customer
 growth-cli workflows delete <workflow-id> [--force]
 growth-cli workflows trigger <workflow-id> --email <email> [--tags a,b]
 
 growth-cli transactional list
+growth-cli transactional get <slug> [--export]
+growth-cli transactional create --file <path>
+growth-cli transactional update <slug> --file <path>
+growth-cli transactional archive|restore <slug>
 growth-cli transactional send <slug> --email <email> [--var firstName=Jane] [--tags a,b]
 
 growth-cli affiliate click --ref <ref>
