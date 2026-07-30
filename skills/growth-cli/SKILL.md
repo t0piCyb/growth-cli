@@ -21,6 +21,7 @@ Use the `growth-cli` skill when you need to:
 - Provides a generated CLI shell for the growth API.
 - Stores tokens in `~/.config/tokens/growth-cli.txt`.
 - Supports standard output flags such as `--json`, `--format`, `--verbose`, `--no-color`, and `--no-header`.
+- Manages sending providers, sender identities and per-stream routing.
 - Should be finalized with real resource tables after implementing resources.
 
 ## Common Use Cases
@@ -125,6 +126,52 @@ without dropping the ones another integration wrote, and merges custom fields.
 AND the whole custom-field record, `tags add` returns 404 when the contact does
 not exist yet. Adding a tag through `identify` still fires `tag_added`
 workflows, so no placeholder workflow is needed to carry a payload.
+
+### campaigns
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli campaigns list [--status <s>] [--limit <n>]` | List campaigns, newest first |
+| `growth-cli campaigns get <id> [--export]` | Show one; `--export` prints the authoring JSON |
+| `growth-cli campaigns create --name <n> --subject <s> --markdown <path> [--tags a,b]` | Create a draft from a markdown body |
+| `growth-cli campaigns create --file <path>` | Create from a JSON document (`-` reads stdin) |
+| `growth-cli campaigns update <id> [--file <p>\|flags]` | Patch a draft or scheduled campaign |
+| `growth-cli campaigns schedule <id> --at <iso\|ms>` | Book a future send |
+| `growth-cli campaigns unschedule <id>` | Back to draft |
+| `growth-cli campaigns send <id> [--test <email>]` | **Sends for real** unless `--test` is passed |
+| `growth-cli campaigns archive\|restore <id>` | Flip the archive flag |
+| `growth-cli campaigns analytics <id>` | Delivery, engagement and top links |
+| `growth-cli campaigns recipients <id> [--cursor <c>] [--limit <n>]` | Who got it and what they did |
+
+`--markdown` wraps the file in one `{ "type": "text", "props": { "markdown": ... } }`
+block. For anything richer (headings, buttons, images, surveys) author the
+`contentBlocks` array in a JSON document and pass `--file`; `get --export`
+prints exactly that shape, so a campaign round-trips.
+
+```bash
+growth-cli campaigns create --name "August" --subject "What shipped" \
+  --markdown body.md --tags customers --json          # returns campaign.id
+growth-cli campaigns send <id> --test me@example.com   # preview first
+growth-cli campaigns schedule <id> --at 2026-08-01T09:00
+```
+
+`update` is rejected once a campaign is sending or sent. `send` without
+`--test` mails every subscribed contact matching the audience — there is no
+undo.
+
+### surveys
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli surveys list` | Surveys with response counters |
+| `growth-cli surveys get <id>` | One survey with its average score |
+| `growth-cli surveys create --type <nps\|rating\|yesno\|choice> [--question <q>] [--options a,b]` | Create a survey |
+| `growth-cli surveys responses <id> [--cursor <c>] [--limit <n>]` | Individual answers, newest first |
+| `growth-cli surveys archive\|restore <id>` | Hide or unhide it in the results page |
+
+`create` returns a `surveyId` to reference from a `survey` content block:
+`{ "type": "survey", "props": { "surveyId": "j92...", "question": "..." } }`.
+The wording on the block wins and is mirrored back onto the survey on save.
 
 ### workflows
 
@@ -243,13 +290,98 @@ be passed at send time through `--var`.
 
 `list` returns only `active` definitions; read an archived one with `get`.
 
-### affiliate
+### affiliate (tracking events)
 
 | Command | Effect |
 | --- | --- |
 | `growth-cli affiliate click --ref <code>` | Record a referral click |
 | `growth-cli affiliate signup --ref <code> --email <e>` | Record a referred signup |
 | `growth-cli affiliate payment --email <e> --amount <n>` | Record a payment for commission |
+
+### affiliates (alias `partners`)
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli affiliates list [--status <s>] [--limit <n>]` | Partners with their rollups |
+| `growth-cli affiliates get <id>` | One partner and its program |
+| `growth-cli affiliates create --name <n> --email <e> [--code <c>] [--target-url <u>]` | Create + email the invite |
+| `growth-cli affiliates activate\|pause <id>` | Change status |
+| `growth-cli affiliates payout <id>` | **Moves money**: transfers approved commissions via Stripe |
+| `growth-cli affiliates stats` | Program totals |
+
+### promo-codes (alias `promos`)
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli promo-codes list [--affiliate <id>]` | Codes with redemptions |
+| `growth-cli promo-codes create --code <c> --percent <pct>\|--amount <minor> [--affiliate <id>]` | Create in Stripe + Growth |
+| `growth-cli promo-codes update <id> [--expires-at <d>] [--max-redemptions <n>] [--clear-expiry] [--clear-limit]` | Edit deadline / limit |
+| `growth-cli promo-codes pause\|activate <id>` | Flip the Stripe `active` flag |
+| `growth-cli promo-codes sync [--limit <n>] [--starting-after <id>]` | Import codes created in Stripe |
+
+Creating a code needs a connected Stripe account with charges enabled.
+Editing the deadline or the limit archives the Stripe code and recreates it
+(Stripe promotion codes are immutable); Growth carries redemptions over.
+
+### commissions / payments / payouts
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli commissions list [--status <s>] [--affiliate <id>]` | Commissions, newest first |
+| `growth-cli commissions approve <id>` | Make a pending commission payable |
+| `growth-cli payments list [--affiliate <id>] [--cursor <c>]` | Collected payments, newest first |
+| `growth-cli payments summary` | Rolling four-week totals |
+| `growth-cli payouts list [--affiliate <id>]` | Transfers to partners |
+
+Paying a partner is a two-step flow: `commissions approve <id>` for each
+pending commission, then `affiliates payout <affiliateId>` to transfer them.
+All amounts are in minor units (cents).
+
+### providers / identities / routing
+
+Who an organization's email is sent by, and which kind of email goes through
+which sender.
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli providers list` | Provider accounts (SES, Resend, Brevo, SMTP) |
+| `growth-cli providers test <id>` | Check credentials; for SES also quota, send rate, sandbox state |
+| `growth-cli identities list` | Sender addresses bound to a provider account |
+| `growth-cli identities create --provider <id> --from "Acme <hi@acme.com>" [--from-name <n>] [--reply-to <a>]` | Create or update an identity |
+| `growth-cli identities delete <id>` | Delete an identity |
+| `growth-cli routing show` | Current stream routing |
+| `growth-cli routing set --default --identity <id>` | Set the default sender |
+| `growth-cli routing set --stream <marketing\|transactional> --identity <id>` | Route one stream |
+| `growth-cli routing set --stream <s> --clear` | Clear a route, falling back to the default |
+
+```bash
+# Point everything at one sender
+growth-cli identities create --provider prov_123 --from "Acme <hello@acme.com>"
+growth-cli routing show
+
+# Split marketing and transactional
+growth-cli identities create --provider prov_123 --from "Acme <news@acme.com>"
+growth-cli routing set --stream marketing --identity ident_news
+growth-cli routing set --stream transactional --identity ident_hello
+
+# Before a big campaign: confirm SES is out of the sandbox and see the rate cap
+growth-cli providers test prov_123 --json
+```
+
+Rules that matter:
+
+- Provider accounts are created in the Growth UI. Credentials are **never**
+  returned by the API or the CLI, not even masked — do not try to read them
+  back.
+- `identities create` is an upsert on the address, so it is safe to rerun from a
+  provisioning script.
+- The first identity created becomes the default route; an organization that
+  only needs one sender needs no `routing set` at all.
+- Routing resolves as: the stream's identity → the default identity → the
+  platform sender. `system` email (sign-in links, platform alerts) is never
+  routable and always leaves through the platform.
+- A marketing unsubscribe does **not** block the `transactional` stream. Only a
+  hard bounce or a complaint blocks everything.
 
 ## Output Format
 
