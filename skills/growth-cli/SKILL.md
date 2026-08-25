@@ -159,6 +159,29 @@ growth-cli campaigns schedule <id> --at 2026-08-01T09:00
 `--test` mails every subscribed contact matching the audience — there is no
 undo.
 
+#### Never write the signature
+
+The organization signs its emails with a shared `snippet` block. **Stop the
+body at the valediction** — "Bonne fin d'été," — and let the snippet supply the
+names; a sign-off in the markdown lands right on top of the snippet's, and the
+reader sees the founders twice in a row.
+
+```jsonc
+// ❌ the inbox shows "Pilou, cofondateur…" then "Blandine et Pilou, fondateurs…"
+{ "type": "text", "props": { "markdown": "Bonne fin d'été,\n\nPilou, cofondateur d'amencolors.com" } },
+{ "type": "snippet", "props": { "snippetId": "nh72..." } }
+
+// ✅
+{ "type": "text", "props": { "markdown": "Bonne fin d'été," } },
+{ "type": "snippet", "props": { "snippetId": "nh72..." } }
+```
+
+`campaigns`, `workflows` and `transactional` `create` / `update` refuse a
+document that pairs the two and name the offending line. Pass
+`--allow-signature` only when that snippet block is genuinely not a signature.
+The API has no snippets endpoint, so the check reads the wording, not the
+snippet — open the snippet in the web editor when you need to know what it says.
+
 ### surveys
 
 | Command | Effect |

@@ -3,6 +3,7 @@ import { client } from "../lib/client.js";
 import { CliError, handleError } from "../lib/errors.js";
 import { readJsonDocument } from "../lib/jsonFile.js";
 import { output } from "../lib/output.js";
+import { assertNoDuplicateSignature } from "../lib/signature.js";
 import { globalFlags } from "../lib/config.js";
 
 /**
@@ -27,6 +28,7 @@ type ActionOpts = {
   lastName?: string;
   tags?: string;
   field?: string;
+  allowSignature?: boolean;
 };
 
 const splitList = (value: string | undefined) =>
@@ -205,11 +207,18 @@ workflowsResource
   .command("create")
   .description("Create a workflow from a JSON document")
   .requiredOption("--file <path>", 'Workflow JSON file ("-" reads stdin)')
+  .option(
+    "--allow-signature",
+    "Keep a sign-off in the markdown next to a snippet block",
+  )
   .option("--json", "Output as JSON")
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .action(async (opts: ActionOpts) => {
     try {
-      const body = readJsonDocument(opts.file!);
+      const body = assertNoDuplicateSignature(
+        readJsonDocument(opts.file!),
+        opts.allowSignature,
+      );
       const data = await client.post("/email/workflows", body);
       reportSave(data, opts);
     } catch (err) {
@@ -222,11 +231,18 @@ workflowsResource
   .description("Replace a workflow from a JSON document")
   .argument("<workflow-id>", "Workflow ID")
   .requiredOption("--file <path>", 'Workflow JSON file ("-" reads stdin)')
+  .option(
+    "--allow-signature",
+    "Keep a sign-off in the markdown next to a snippet block",
+  )
   .option("--json", "Output as JSON")
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .action(async (workflowId: string, opts: ActionOpts) => {
     try {
-      const body = readJsonDocument(opts.file!);
+      const body = assertNoDuplicateSignature(
+        readJsonDocument(opts.file!),
+        opts.allowSignature,
+      );
       const data = await client.put(
         `/email/workflows/${encodeURIComponent(workflowId)}`,
         body,

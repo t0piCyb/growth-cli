@@ -5,6 +5,7 @@ import { globalFlags } from "../lib/config.js";
 import { CliError, handleError } from "../lib/errors.js";
 import { readJsonDocument } from "../lib/jsonFile.js";
 import { output } from "../lib/output.js";
+import { assertNoDuplicateSignature } from "../lib/signature.js";
 import { parseDate, splitList } from "../lib/values.js";
 
 /**
@@ -31,6 +32,7 @@ type ActionOpts = {
   tags?: string;
   at?: string;
   test?: string;
+  allowSignature?: boolean;
 };
 
 /**
@@ -85,7 +87,12 @@ const readMarkdownBlocks = (path: string) => {
 
 /** Body from `--file` (full JSON document) or from the individual flags. */
 const buildBody = (opts: ActionOpts, requireContent: boolean) => {
-  if (opts.file) return readJsonDocument(opts.file);
+  if (opts.file) {
+    return assertNoDuplicateSignature(
+      readJsonDocument(opts.file),
+      opts.allowSignature,
+    );
+  }
 
   const body: Record<string, unknown> = {};
   if (opts.name) body.name = opts.name;
@@ -112,16 +119,14 @@ const printCampaign = (data: any, opts: ActionOpts) => {
   });
 };
 
-export const campaignsResource = new Command("campaigns")
-  .description("Create, schedule and send email campaigns");
+export const campaignsResource = new Command("campaigns").description(
+  "Create, schedule and send email campaigns",
+);
 
 campaignsResource
   .command("list")
   .description("List campaigns, newest first")
-  .option(
-    "--status <status>",
-    "draft|scheduled|sending|sent|paused|archived",
-  )
+  .option("--status <status>", "draft|scheduled|sending|sent|paused|archived")
   .option("--limit <n>", "Max campaigns to return (1-200)")
   .option("--fields <cols>", "Comma-separated columns to display")
   .option("--json", "Output as JSON")
@@ -178,6 +183,10 @@ campaignsResource
   .option("--from <email>", "From address")
   .option("--reply-to <email>", "Reply-to address")
   .option("--tags <tags>", "Comma-separated audience tags")
+  .option(
+    "--allow-signature",
+    "Keep a sign-off in the markdown next to a snippet block",
+  )
   .option("--json", "Output as JSON")
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .addHelpText(
@@ -205,6 +214,10 @@ campaignsResource
   .option("--from <email>", "From address")
   .option("--reply-to <email>", "Reply-to address")
   .option("--tags <tags>", "Comma-separated audience tags (replaces the list)")
+  .option(
+    "--allow-signature",
+    "Keep a sign-off in the markdown next to a snippet block",
+  )
   .option("--json", "Output as JSON")
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .action(async (campaignId: string, opts: ActionOpts) => {

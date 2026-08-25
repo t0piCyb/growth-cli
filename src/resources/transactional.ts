@@ -3,6 +3,7 @@ import { client } from "../lib/client.js";
 import { handleError } from "../lib/errors.js";
 import { readJsonDocument } from "../lib/jsonFile.js";
 import { output } from "../lib/output.js";
+import { assertNoDuplicateSignature } from "../lib/signature.js";
 import { globalFlags } from "../lib/config.js";
 
 /**
@@ -22,6 +23,7 @@ type ActionOpts = {
   lastName?: string;
   tags?: string;
   var?: string;
+  allowSignature?: boolean;
 };
 
 /**
@@ -123,7 +125,9 @@ transactionalResource
       )) as { transactional?: any };
 
       if (opts.export) {
-        console.log(JSON.stringify(toAuthoringDoc(data.transactional), null, 2));
+        console.log(
+          JSON.stringify(toAuthoringDoc(data.transactional), null, 2),
+        );
         return;
       }
       output(wantsJson(opts) ? data : (data.transactional ?? data), {
@@ -139,6 +143,10 @@ transactionalResource
   .command("create")
   .description("Create a transactional email from a JSON document")
   .requiredOption("--file <path>", 'Transactional JSON file ("-" reads stdin)')
+  .option(
+    "--allow-signature",
+    "Keep a sign-off in the markdown next to a snippet block",
+  )
   .option("--json", "Output as JSON")
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .addHelpText(
@@ -149,7 +157,10 @@ transactionalResource
     try {
       const data = (await client.post(
         "/email/transactional",
-        readJsonDocument(opts.file!),
+        assertNoDuplicateSignature(
+          readJsonDocument(opts.file!),
+          opts.allowSignature,
+        ),
       )) as { transactional?: any };
       output(wantsJson(opts) ? data : transactionalRow(data.transactional), {
         json: opts.json,
@@ -165,6 +176,10 @@ transactionalResource
   .description("Update a transactional email from a JSON document")
   .argument("<transactional>", "Transactional slug or id")
   .requiredOption("--file <path>", 'Transactional JSON file ("-" reads stdin)')
+  .option(
+    "--allow-signature",
+    "Keep a sign-off in the markdown next to a snippet block",
+  )
   .option("--json", "Output as JSON")
   .option("--format <fmt>", "Output format: text, json, csv, yaml")
   .addHelpText(
@@ -175,7 +190,10 @@ transactionalResource
     try {
       const data = (await client.patch(
         `/email/transactional/${encodeURIComponent(transactional)}`,
-        readJsonDocument(opts.file!),
+        assertNoDuplicateSignature(
+          readJsonDocument(opts.file!),
+          opts.allowSignature,
+        ),
       )) as { transactional?: any };
       output(wantsJson(opts) ? data : transactionalRow(data.transactional), {
         json: opts.json,

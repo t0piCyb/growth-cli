@@ -4,10 +4,10 @@
   "description": "CLI for the growth API",
   "type": "module",
   "bin": {
-    "growth-cli": "./dist/index.js"
+    "growth-cli": "./dist/growth-cli.js"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outfile dist/index.js --target bun",
+    "build": "bun build src/index.ts --outfile dist/growth-cli.js --target bun",
     "dev": "bun run src/index.ts",
     "typecheck": "tsc --noEmit"
   },
