@@ -7,10 +7,31 @@ export const APP_NAME = "growth";
 /** CLI binary name (replaced during api2cli create) */
 export const APP_CLI = "growth-cli";
 
-/** API base URL (replaced during api2cli create) */
-export const BASE_URL = (
-  process.env.GROWTH_API_URL ?? "https://affi.topilo.dev/api/v1"
-).replace(/\/$/, "");
+/** Every path this CLI requests is relative to the versioned API root. */
+const API_PREFIX = "/api/v1";
+
+/**
+ * API base URL (replaced during api2cli create).
+ *
+ * The shebang is `#!/usr/bin/env bun`, and Bun auto-loads the `.env` of the
+ * current directory — so running the CLI from inside a product repository
+ * silently inherits that app's `GROWTH_API_URL`. The app points it at the site
+ * root (it appends `/api/v1` itself), which stripped the prefix here and turned
+ * every call into a 500 from the site's catch-all route. Hence two guards: a
+ * CLI-specific variable that no app defines, and a base URL missing the prefix
+ * gets it back.
+ */
+export const BASE_URL = ((): string => {
+  const configured = (
+    process.env.GROWTH_CLI_API_URL ??
+    process.env.GROWTH_API_URL ??
+    `https://affi.topilo.dev${API_PREFIX}`
+  ).replace(/\/$/, "");
+
+  return configured.endsWith(API_PREFIX)
+    ? configured
+    : `${configured}${API_PREFIX}`;
+})();
 
 export type AuthType = "bearer" | "api-key" | "basic" | "custom";
 

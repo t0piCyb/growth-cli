@@ -40,15 +40,19 @@ const markdownOf = (block: any): string | null =>
  * The offending line in one `contentBlocks` array, or null. Only the last two
  * lines of the last text block before the snippet are considered — a
  * "fondateur" mentioned mid-body is prose, not a signature.
+ *
+ * The *last* snippet is the signing one: workflow emails open with a header
+ * snippet and close with the signature, so anchoring on the first found no body
+ * text at all and cleared every one of them.
  */
 const findDuplicateSignature = (blocks: unknown): string | null => {
   if (!Array.isArray(blocks)) return null;
 
-  const snippetAt = blocks.findIndex((block: any) => block?.type === "snippet");
-  if (snippetAt < 0) return null;
+  const signsAt = blocks.map((b: any) => b?.type).lastIndexOf("snippet");
+  if (signsAt < 0) return null;
 
   const body = blocks
-    .slice(0, snippetAt)
+    .slice(0, signsAt)
     .map(markdownOf)
     .filter((markdown): markdown is string => markdown !== null)
     .at(-1);
