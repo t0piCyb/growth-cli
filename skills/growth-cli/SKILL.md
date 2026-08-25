@@ -185,6 +185,28 @@ The wording on the block wins and is mirrored back onto the survey on save.
 | `growth-cli workflows delete <id> [--force]` | Delete; `--force` required if contacts are enrolled |
 | `growth-cli workflows trigger <id> --email <e>` | Enroll a contact (workflow must be `api_request` + active) |
 
+### events
+
+Fire what happened and let the organization's routes pick the workflow, instead
+of pinning a workflow id in the caller. Routing reads the contact's **merged**
+profile, so an event carrying no attribution (a payment webhook) still routes on
+the `utm_campaign` written on that contact weeks earlier.
+
+| Command | Effect |
+| --- | --- |
+| `growth-cli events trigger <event> --email <e> [--tags a,b] [--field k=v]` | Fire an event; prints `enrolled`, `reason`, the workflow and how it matched |
+| `growth-cli events routes list [--event <e>]` | Routes in resolution order |
+| `growth-cli events routes set <event> --workflow <id> [--key <f> --value <v>] [--priority <n>] [--status active\|paused] [--id <routeId>]` | Create or update; omit `--key/--value` for the event default |
+| `growth-cli events routes rm <route-id>` | Delete a route |
+
+`events trigger` returns **200 even when nothing was enrolled** — the contact was
+merged either way. Read `enrolled` and `reason`; `no_route` means the event has
+no route at all, and nothing else will tell you.
+
+Rules are always tried before the event default, highest `priority` first, and a
+default never shadows a rule. A routed workflow must use the `api_request`
+trigger — `routes set` refuses at save time otherwise.
+
 #### Workflow JSON format
 
 Steps nest: a `condition` step carries `yes` / `no` arrays. Everything else is
