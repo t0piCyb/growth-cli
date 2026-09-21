@@ -335,6 +335,30 @@ be passed at send time through `--var`.
 
 `list` returns only `active` definitions; read an archived one with `get`.
 
+### outreach (alias `quick-send`)
+
+Quick send lets a partner, right after a call, type a prospect's email in the
+app and send them a prepared email carrying *their* promo code and link, and
+optionally start the prospect on a workflow. The CLI manages what partners get;
+the sending itself happens in the app, as the signed-in partner.
+
+| Command | Effect |
+| --- | --- |
+| `outreach show` | Outreach templates + every org workflow with its Quick send switch |
+| `outreach templates list` / `get <id> [--export]` | Read `partner_outreach` templates |
+| `outreach templates create --file <path>` | New template (`name`, `subject`, `contentBlocks`, optional `previewText`, `description`) |
+| `outreach templates update <id> --file <path>` | Writes only the keys present |
+| `outreach workflows enable\|disable <workflow-id>` | Let partners start that workflow (their own workflows are always available to them) |
+| `outreach sends [--limit n]` | Recent sends: prospect, partner, template, workflow, status |
+
+Variables resolved from the sending partner: `@{promoCode}`, `@{referralCode}`,
+`@{referralLink}`, `@{partnerName}`, `@{partnerFirstName}`, `@{partnerEmail}`,
+`@{organizationName}`, plus `@{firstName}` (prospect) and `@{message}` (the
+sender's optional note). When a partner sends, the partner fields are also
+saved on the contact, so emails of the workflow they start can use the same
+variables (not `@{message}`). Use `@{referralLink}` for the button so clicks
+are attributed to the partner.
+
 ### affiliate (tracking events)
 
 | Command | Effect |

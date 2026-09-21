@@ -65,6 +65,14 @@ growth-cli transactional update <slug> --file <path>
 growth-cli transactional archive|restore <slug>
 growth-cli transactional send <slug> --email <email> [--var firstName=Jane] [--tags a,b]
 
+growth-cli outreach show                                   # Quick send setup at a glance
+growth-cli outreach templates list|get <id> [--export]
+growth-cli outreach templates create --file <path>
+growth-cli outreach templates update <id> --file <path>
+growth-cli outreach workflows list
+growth-cli outreach workflows enable|disable <workflow-id>
+growth-cli outreach sends [--limit 30]
+
 growth-cli affiliate click --ref <ref>
 growth-cli affiliate signup --customer-key <key> [--ref <ref>]
 growth-cli affiliate payment --customer-key <key> [--amount 4900 --currency usd --source-id invoice_123]
