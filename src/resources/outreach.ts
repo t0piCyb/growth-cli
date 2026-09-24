@@ -279,7 +279,7 @@ outreachResource
               partner: send.partnerName ?? "-",
               template: send.templateName ?? "-",
               workflow: send.workflowName ?? "-",
-              status: send.status,
+              status: send.delivery?.status ?? send.status,
               createdAt: send.createdAt,
             })),
         { json: opts.json, format: opts.format, fields: opts.fields?.split(",") },
